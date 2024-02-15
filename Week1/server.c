@@ -56,6 +56,9 @@ int main() {
 
     // Check if the message is "hello"
     if (strncmp(buffer, "hello", 5) == 0) {
+        // Print received message
+        printf("Received: %s\n", buffer);
+
         // Send ACK back to client
         if (send(client_socket, "ACK", 3, 0) == -1) {
             perror("Error sending ACK");
