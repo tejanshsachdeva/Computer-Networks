@@ -22,10 +22,10 @@ int main() {
 
     // Bind the socket to the address and port
     memset(&server_address, 0, sizeof(server_address));
-    server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = INADDR_ANY;
+    server_address.sin_family = AF_INET;  //ipv4
+    server_address.sin_addr.s_addr = INADDR_ANY;  //accept in any interface
     server_address.sin_port = htons(PORT);
-    if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1) {
+    if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1) {  //checks binding
         perror("Error binding socket");
         exit(1);
     }
@@ -39,7 +39,7 @@ int main() {
     printf("Server listening on port %d\n", PORT);
 
     // Accept a connection
-    client_socket = accept(server_socket, (struct sockaddr *)&client_address, (socklen_t*)&addrlen);
+    client_socket = accept(server_socket, (struct sockaddr *)&client_address, (socklen_t*)&addrlen);  //blocks server until server connects
     if (client_socket == -1) {
         perror("Error accepting connection");
         exit(1);
@@ -55,7 +55,7 @@ int main() {
     }
 
     // Check if the message is "hello"
-    if (strncmp(buffer, "hello", 5) == 0) {
+    if (strncmp(buffer, "hello", 5) == 0) {  //check if first 5 char is hello
         // Print received message
         printf("Received: %s\n", buffer);
 
