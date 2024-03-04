@@ -1,92 +1,71 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sys/types.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <netinet/in.h>
+#include <string.h>
+#include <arpa/inet.h> // for inet_addr
+#include <unistd.h> // for close
+#define ENCODING "UTF-8" // Specify encoding (e.g., UTF-8 or ASCII)
 
-#define PORT 65432
+#define WINDOW_SIZE 5
 
-int main() {
-    int server_socket, client_socket;
-    struct sockaddr_in server_address, client_address;
-    char buffer[1024];
-    int addrlen = sizeof(client_address);
+int main()
+{
+    int sockid;
+    int bindid;
+    struct sockaddr_in myaddr;
+    struct sockaddr_in client;
+    int newsockid;
+    int clientlen;
+    int n;
+    int msg_count = 0; // Track the message count
+    char msg[1000];
+    char ack[1000];
+    int port_id = 6000;
 
-    // Create a TCP socket
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket == -1) {
-        perror("Error creating socket");
-        exit(1);
+    sockid = socket(AF_INET, SOCK_STREAM, 0);
+
+    bzero((char*)&myaddr, sizeof(struct sockaddr));
+    myaddr.sin_family = AF_INET;
+    myaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+    myaddr.sin_port = htons(port_id);
+    bindid = bind(sockid, (struct sockaddr*)&myaddr, sizeof(struct sockaddr_in));
+
+    if (bindid < 0) {
+        printf("error \n");
+        return 1;
     }
 
-    // Bind the socket to the address and port
-    memset(&server_address, 0, sizeof(server_address));
-    server_address.sin_family = AF_INET;
-    server_address.sin_addr.s_addr = INADDR_ANY;
-    server_address.sin_port = htons(PORT);
-    if (bind(server_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1) {
-        perror("Error binding socket");
-        exit(1);
+    listen(sockid, 5);
+
+    clientlen = sizeof(struct sockaddr_in);
+    newsockid = accept(sockid, (struct sockaddr*)&client, &clientlen);
+    if (newsockid < 0) {
+        printf("error 2\n");
+        return 1;
     }
 
-    // Listen for connections
-    if (listen(server_socket, 5) == -1) {
-        perror("Error listening");
-        exit(1);
-    }
-
-    printf("Server listening on port %d\n", PORT);
-
-    // Accept a connection
-    client_socket = accept(server_socket, (struct sockaddr *)&client_address, (socklen_t*)&addrlen);
-    if (client_socket == -1) {
-        perror("Error accepting connection");
-        exit(1);
-    }
-
-    printf("Connected by %s:%d\n", inet_ntoa(client_address.sin_addr), ntohs(client_address.sin_port));
-
-    int num_received_messages = 0;
     while (1) {
-        // Receive data from client
-        int bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-        if (bytes_received == -1) {
-            perror("Error receiving data");
-            break;
-        } else if (bytes_received == 0) {
-            printf("Client disconnected.\n");
-            break;
+        if (msg_count % WINDOW_SIZE == 0 && msg_count > 0) {
+            // Send acknowledgment when the window is full
+            printf("Acknowledgement Sent\n");
+            send(newsockid, "ACK", strlen("ACK"), 0);
         }
 
-        // Check if the message is "hello"
-        if (strncmp(buffer, "hello", 5) == 0) {
-            printf("Received: %s\n", buffer);
-            num_received_messages++;
+        if (recv(newsockid, msg, sizeof(msg), 0) > 0) {
+            printf("Tejansh : %s\n", msg);
+            msg_count++;
+        }
 
-            // Send ACK back to client (optional)
-            if (send(client_socket, "ACK", 3, 0) == -1) {
-                perror("Error sending ACK");
-                break;
-            }
-            printf("Sent ACK to client\n");
-
-            // Block server after 5 messages are received
-            if (num_received_messages == 5) {
-                printf("Client sent 5 'hello' messages. Blocking server.\n");
-                while (1) {
-                    // Sleep for 1 second to simulate blocking
-                    sleep(1);
-                }
-            }
-        } else {
-            printf("Unexpected message: %s\n", buffer);
+        // Send acknowledgment for each message except the first five
+        if (msg_count > WINDOW_SIZE && msg_count % WINDOW_SIZE != 0) {
+            printf("ACK for %d\n", msg_count);
+            send(newsockid, "ACK", strlen("ACK"), 0);
         }
     }
 
-    // Close connections
-    close(client_socket);
-    close(server_socket);
+    close(newsockid);
+    close(sockid);
 
     return 0;
 }

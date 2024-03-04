@@ -1,66 +1,74 @@
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <sys/types.h>
 #include <sys/socket.h>
-#include <arpa/inet.h>
-#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h> // for inet_addr
+#include <unistd.h> // for close
+#include <string.h>
+#define ENCODING "UTF-8" // Specify encoding (e.g., UTF-8 or ASCII)
 
-#define PORT 65432
+#define WINDOW_SIZE 5
 
-int main() {
-    int client_socket;
-    struct sockaddr_in server_address;
-    char message[] = "hello";
-    char buffer[1024];
-    int bytes_received, num_sent_messages = 0;
+int main()
+{
+    int sockid;
+    int connectid;
+    struct sockaddr_in servaddr;
+    struct sockaddr_in client;
+    int newsockid;
+    int clientlen;
+    int n;
+    int msg_count = 0; // Track the message count
+    char msg[1000];
+    char ack[1000];
+    int port_id = 6000;
 
-    // Create a TCP socket
-    client_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (client_socket == -1) {
-        perror("Error creating socket");
-        exit(1);
+    sockid = socket(AF_INET, SOCK_STREAM, 0);
+
+    bzero((char*)&servaddr, sizeof(struct sockaddr_in));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    servaddr.sin_port = htons(port_id);
+    connectid = connect(sockid, (struct sockaddr*)&servaddr, sizeof(struct sockaddr_in));
+
+    if (connectid < 0) {
+        printf("error \n");
+        return 1;
     }
 
-    // Set up server address
-    memset(&server_address, 0, sizeof(server_address));
-    server_address.sin_family = AF_INET;
-    server_address.sin_port = htons(PORT);
-    inet_pton(AF_INET, "localhost", &server_address.sin_addr);
-
-    // Connect to server
-    if (connect(client_socket, (struct sockaddr *)&server_address, sizeof(server_address)) == -1) {
-        perror("Error connecting to server");
-        exit(1);
+    // Send first 5 messages
+    for (int i = 0; i < WINDOW_SIZE; ++i) {
+        printf("Enter message: ");
+        fgets(msg, sizeof(msg), stdin);
+        send(sockid, msg, strlen(msg), 0);
+        msg_count++;
     }
 
-    // Send "hello" messages until 5 are sent
-    while (num_sent_messages < 5) {
-        // Send message
-        if (send(client_socket, message, strlen(message), 0) == -1) {
-            perror("Error sending message");
-            exit(1);
-        }
-        printf("Sent: %s\n", message);
-        num_sent_messages++;
+    // Receive acknowledgment for the first 5 messages
+    recv(sockid, ack, sizeof(ack), 0);
+    printf("Received acknowledgment: %s\n", ack);
 
-        // Receive ACK from server (optional)
-        // You can uncomment the following lines to receive and confirm ACKs:
-        // bytes_received = recv(client_socket, buffer, sizeof(buffer), 0);
-        // if (bytes_received == -1) {
-        //     perror("Error receiving data");
-        //     exit(1);
-        // }
-        // if (strncmp(buffer, "ACK", 3) == 0) {
-        //     printf("Received ACK: %s\n", buffer);
-        // } else {
-        //     printf("Unexpected message: %s\n", buffer);
-        // }
+    while (1) {
+        // Check if the client has sent a message per received acknowledgment
+        //if (msg_count % WINDOW_SIZE == 0) {
+            // Wait for acknowledgment before sending the next message
+            printf("Enter message: ");
+            fgets(msg, sizeof(msg), stdin);
+            send(sockid, msg, strlen(msg), 0);
+            msg_count++;
+            // Receive acknowledgment for the current message
+            recv(sockid, ack, sizeof(ack), 0);
+            printf("Received acknowledgment: %s\n", ack);
+        //} else {
+            // Send messages without waiting for acknowledgment
+            //printf("Enter message: ");
+            //fgets(msg, sizeof(msg), stdin);
+            //send(sockid, msg, strlen(msg), 0);
+            //msg_count++;
+        //}
     }
 
-    printf("Sent 5 'hello' messages. Blocking client.\n");
+    close(sockid);
 
-    // Close the connection
-    close(client_socket);
-
-    return 0;
+    return (0);
 }
